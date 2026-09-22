@@ -59,6 +59,7 @@
  *
  *
  * TODO:
+ *   - Add more tga structure preserving parasites on overwrite: orientation, rle.
  *   - Handle TGA images with version 2 extensions (image comment,
  *     resolution, date, ...).
  *   - GIMP stores the indexed alpha channel as a separate byte,
@@ -406,13 +407,15 @@ static GimpImage *
 load_image (GFile   *file,
             GError **error)
 {
-  FILE      *fp;
-  tga_info   info;
-  guchar     header[18];
-  guchar     footer[26];
-  guchar     extension[495];
-  long       offset;
-  GimpImage *image = NULL;
+  FILE         *fp;
+  tga_info      info;
+  guchar        header[18];
+  guchar        footer[26];
+  guchar        extension[495];
+  long          offset;
+  GimpImage    *image    = NULL;
+  GimpParasite *parasite = NULL;
+  guchar        image_id[256];
 
   gimp_progress_init_printf (_("Opening '%s'"),
                              gimp_file_get_utf8_name (file));
@@ -615,16 +618,34 @@ load_image (GFile   *file,
       return NULL;
     }
 
-  /* Skip the image ID field. */
-  if (info.idLength && fseek (fp, info.idLength, SEEK_CUR))
+  /* Read the image ID field. */
+  if (info.idLength)
     {
-      g_message ("File '%s' is truncated or corrupted",
-                 gimp_file_get_utf8_name (file));
-      fclose (fp);
-      return NULL;
+      if (fread (image_id, info.idLength, 1, fp) != 1)
+        {
+          g_message ("File '%s' is truncated or corrupted",
+                     gimp_file_get_utf8_name (file));
+          fclose (fp);
+          return NULL;
+        }
     }
+  /* Allow printing non null terminated strings in a debugger */
+  image_id[info.idLength] = '\0';
 
   image = ReadImage (fp, &info, file);
+
+  if (image != NULL)
+    {
+      if (info.idLength)
+        {
+          parasite = gimp_parasite_new ("tga-image-id",
+                                        GIMP_PARASITE_PERSISTENT,
+                                        info.idLength,
+                                        (gpointer) image_id);
+          gimp_image_attach_parasite (image, parasite);
+          gimp_parasite_free (parasite);
+        }
+    }
 
   fclose (fp);
 
@@ -1198,6 +1219,10 @@ export_image (GFile         *file,
   guchar        *gimp_cmap = NULL;
   gboolean       rle;
   TgaOrigin      origin;
+  GimpParasite  *parasite        = NULL;
+  guint32        parasite_length = 0;
+  guint8         id_length       = 0;
+  gconstpointer  image_id        = NULL;
 
   g_object_get (config,
                 "rle", &rle,
@@ -1225,7 +1250,22 @@ export_image (GFile         *file,
       return FALSE;
     }
 
-  header[0] = 0; /* No image identifier / description */
+  parasite = gimp_image_get_parasite (image, "tga-image-id");
+  if (parasite != NULL)
+    {
+      image_id = gimp_parasite_get_data (parasite, &parasite_length);
+      if (parasite_length > 255)
+        {
+          g_warning ("Parasite tga-image-id length: %u bytes truncated to 255", parasite_length);
+          id_length = 255;
+        }
+      else
+        {
+          id_length = (guint8) parasite_length;
+        }
+    }
+
+  header[0] = id_length;
 
   if (dtype == GIMP_INDEXED_IMAGE)
     {
@@ -1318,6 +1358,10 @@ export_image (GFile         *file,
   /* write header to front of file */
   fwrite (header, sizeof (header), 1, fp);
 
+  /* write image identification */
+  if (id_length)
+    fwrite (image_id, id_length, 1, fp);
+
   if (dtype == GIMP_INDEXED_IMAGE)
     {
       /* write out palette */
@@ -1408,6 +1452,9 @@ export_image (GFile         *file,
 
   g_free (data);
   g_free (pixels);
+
+  if (parasite != NULL)
+    gimp_parasite_free (parasite);
 
   /* footer must be the last thing written to file */
   memset (footer, 0, 8); /* No extensions, no developer directory */
