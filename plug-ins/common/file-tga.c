@@ -413,9 +413,9 @@ load_image (GFile   *file,
   guchar        footer[26];
   guchar        extension[495];
   long          offset;
-  GimpImage    *image    = NULL;
-  GimpParasite *parasite = NULL;
-  guchar        image_id[256];
+  GimpImage    *image         = NULL;
+  GimpParasite *parasite      = NULL;
+  guchar        image_id[256] = {0};
 
   gimp_progress_init_printf (_("Opening '%s'"),
                              gimp_file_get_utf8_name (file));
@@ -625,12 +625,9 @@ load_image (GFile   *file,
         {
           g_message ("File '%s' is truncated or corrupted",
                      gimp_file_get_utf8_name (file));
-          fclose (fp);
-          return NULL;
+          fseek (fp, sizeof(header) + info.idLength, SEEK_SET);
         }
     }
-  /* Allow printing non null terminated strings in a debugger */
-  image_id[info.idLength] = '\0';
 
   image = ReadImage (fp, &info, file);
 
