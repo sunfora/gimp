@@ -623,9 +623,8 @@ load_image (GFile   *file,
     {
       if (fread (image_id, info.idLength, 1, fp) != 1)
         {
-          g_message ("File '%s' is truncated or corrupted",
-                     gimp_file_get_utf8_name (file));
-          fseek (fp, sizeof(header) + info.idLength, SEEK_SET);
+          g_warning (_("Error reading data. Image may be corrupt."));
+          fseek (fp, sizeof (header) + info.idLength, SEEK_SET);
         }
     }
 
@@ -1104,8 +1103,7 @@ ReadImage (FILE     *fp,
         }
       else
         {
-          g_message ("File '%s' is truncated or corrupted",
-                     gimp_file_get_utf8_name (file));
+          g_message (_("Error reading data. Image may be corrupt."));
           return NULL;
         }
     }
@@ -1253,7 +1251,8 @@ export_image (GFile         *file,
       image_id = gimp_parasite_get_data (parasite, &parasite_length);
       if (parasite_length > 255)
         {
-          g_warning ("Parasite tga-image-id length: %u bytes truncated to 255", parasite_length);
+          g_printerr ("%s: 'tga-image-id' parasite: %u bytes will be truncated to 255\n",
+                      G_STRFUNC, parasite_length);
           id_length = 255;
         }
       else
