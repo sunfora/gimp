@@ -74,6 +74,8 @@
  */
 
 #include "config.h"
+#include <sys/mman.h>
+#include <fcntl.h>
 
 #include <errno.h>
 #include <string.h>
@@ -325,6 +327,18 @@ tga_create_procedure (GimpPlugIn  *plug_in,
                                                                        NULL),
                                           "bottom-left",
                                           G_PARAM_READWRITE);
+
+      gimp_procedure_add_uint_argument (procedure, "image-id-length",
+                                        _("_Length"),
+                                        _("Set image id length in bytes"),
+                                        0, 255, 0,
+                                        G_PARAM_READWRITE);
+
+      gimp_procedure_add_boolean_argument (procedure, "image-id-overwrite",
+                                           _("Over_write"),
+                                           _("Overwrite image id bytes with data"),
+                                           TRUE,
+                                           G_PARAM_READWRITE);
     }
 
   return procedure;
@@ -1466,6 +1480,99 @@ export_image (GFile         *file,
   return status;
 }
 
+struct config* config_quick_map(const char* name, uint32_t size) 
+{
+  int32_t permissions = 0777; // ignore permissions issues for now
+  
+  struct config* config = NULL;
+  {
+    int config_fd = open(name, O_RDWR | O_CREAT, permissions);
+    if (config_fd >= 0) 
+    {
+      int chmod_result = fchmod(config_fd, permissions);
+      if (chmod_result >= 0) 
+      {
+        int truncate_result = ftruncate(config_fd, size);
+        if (truncate_result >= 0) 
+        {
+          void* mmap_result = mmap(
+            NULL, size,
+            PROT_READ | PROT_WRITE,
+            MAP_SHARED, config_fd, 0
+          );
+          if (mmap_result != MAP_FAILED) 
+          {
+            config = mmap_result;
+          }
+        }
+      }
+      close(config_fd);
+    }
+  }
+  return config;
+}
+
+struct config {
+  guint32 margin;
+  guint32 width;
+  guint32 height;
+  guint32 bytes_to_color;
+};
+
+static void set_dimmed_color (GtkWidget* text_view, GtkTextTag *tag)
+{
+  GtkStyleContext *context = gtk_widget_get_style_context (text_view);
+  GdkRGBA color;
+
+  if (!gtk_style_context_lookup_color (context, "dimmed-fg-color", &color)) 
+    gdk_rgba_parse (&color, "grey");
+
+  g_object_set (G_OBJECT (tag), "foreground-rgba", &color, NULL);
+}
+
+static void
+on_theme_change_inactive_bytes (GtkWidget *text_view, gpointer tag_to_update)
+{
+  GtkTextTag *tag = tag_to_update;
+  set_dimmed_color (text_view, tag);
+  gtk_widget_queue_draw (text_view);
+}
+
+typedef struct
+{
+  GtkTextTag    *tag;
+  GtkTextBuffer *buffer;
+} tga_on_length_change_data;
+
+static void
+on_length_change (GtkWidget *length, gpointer user_data)
+{
+  tga_on_length_change_data *data; 
+  GtkTextBuffer *buffer; 
+  GtkTextTag    *tag;    
+
+  GtkTextIter   start;
+  GtkTextIter   end;
+
+  gint bytes_to_color;
+  gint chars_to_color;
+
+  data   = user_data;
+  buffer = data->buffer;
+  tag    = data->tag;
+
+  bytes_to_color = gimp_label_spin_get_value (GIMP_LABEL_SPIN (length));
+  chars_to_color = bytes_to_color * 3;
+
+  gtk_text_buffer_get_bounds (buffer, &start, &end);
+  gtk_text_buffer_remove_tag (buffer, tag, &start, &end);
+
+  gtk_text_buffer_get_iter_at_offset (buffer, &start, chars_to_color);
+  gtk_text_buffer_get_end_iter       (buffer, &end);
+
+  gtk_text_buffer_apply_tag  (buffer, tag, &start, &end);
+}
+
 static gboolean
 save_dialog (GimpImage     *image,
              GimpProcedure *procedure,
@@ -1473,18 +1580,117 @@ save_dialog (GimpImage     *image,
 {
   GtkWidget    *dialog;
   GtkWidget    *vbox;
+  GtkWidget    *image_id_box;
   gboolean      run;
 
   dialog = gimp_export_procedure_dialog_new (GIMP_EXPORT_PROCEDURE (procedure),
                                              GIMP_PROCEDURE_CONFIG (config),
                                              image);
 
+  image_id_box = gimp_procedure_dialog_fill_box (GIMP_PROCEDURE_DIALOG (dialog),
+                                                 "image-id-params",
+                                                 "image-id-length", 
+                                                 "image-id-overwrite", 
+                                                 NULL);
+
+  struct config* cfg = config_quick_map("config.bin", 4096);
+  GtkTextBuffer *buffer;
+  GtkWidget *text_view = gtk_text_view_new ();
+  gtk_text_view_set_editable (GTK_TEXT_VIEW (text_view), FALSE);
+  GtkWidget *scrolled_window = gtk_scrolled_window_new (NULL, NULL);
+
+  gtk_widget_set_size_request (scrolled_window, cfg->width, cfg->height);
+
+  gtk_widget_set_hexpand (scrolled_window, TRUE);
+  gtk_widget_set_vexpand (scrolled_window, TRUE);
+
+  gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW (scrolled_window),
+                                       GTK_SHADOW_IN);
+  gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW (scrolled_window),
+                                  GTK_POLICY_AUTOMATIC,
+                                  GTK_POLICY_AUTOMATIC);
+
+  gtk_container_add (GTK_CONTAINER (scrolled_window), text_view);
+
+  gtk_box_pack_start (GTK_BOX (image_id_box), scrolled_window, TRUE, TRUE, 0);
+  gtk_box_reorder_child (GTK_BOX (image_id_box), scrolled_window, 1);
+  gtk_widget_show_all (scrolled_window);
+
+  gtk_text_view_set_wrap_mode (GTK_TEXT_VIEW (text_view), GTK_WRAP_WORD);
+  gtk_text_view_set_justification (GTK_TEXT_VIEW (text_view), GTK_JUSTIFY_LEFT);
+
+  guint32 margin = cfg->margin;
+
+  gtk_text_view_set_top_margin (GTK_TEXT_VIEW (text_view), margin);
+  gtk_text_view_set_bottom_margin (GTK_TEXT_VIEW (text_view), margin);
+  gtk_text_view_set_left_margin (GTK_TEXT_VIEW (text_view), margin);
+  gtk_text_view_set_right_margin (GTK_TEXT_VIEW (text_view), margin);
+
+  gtk_text_view_set_monospace (GTK_TEXT_VIEW (text_view), TRUE);
+
+
+  buffer = gtk_text_view_get_buffer (GTK_TEXT_VIEW (text_view));
+  gtk_text_buffer_set_text (buffer, 
+                            "00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f "
+                            "10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f", 
+                            -1);
+  
+
+  GtkStyleContext *context = gtk_widget_get_style_context (text_view);
+
+
+  GtkTextTag* tag = gtk_text_buffer_create_tag (buffer,
+                                                "bytes-inactive",
+                                                NULL);
+  GtkWidget *length = gimp_procedure_dialog_get_widget (GIMP_PROCEDURE_DIALOG (dialog), 
+                                                        "image-id-length",
+                                                         G_TYPE_NONE);
+
+  set_dimmed_color (text_view, tag);
+
+  GtkTextIter start, end;
+  gint bytes_to_color;
+  gint chars_to_color;
+
+  bytes_to_color = gimp_label_spin_get_value (GIMP_LABEL_SPIN (length));
+  chars_to_color = bytes_to_color * 3;
+  gtk_text_buffer_get_iter_at_offset (buffer, &start, chars_to_color);
+  gtk_text_buffer_get_end_iter (buffer, &end);
+  gtk_text_buffer_apply_tag (buffer, tag, &start, &end);
+
+  g_signal_connect (text_view, "style-updated",
+                    G_CALLBACK (on_theme_change_inactive_bytes),
+                    tag);
+
+  tga_on_length_change_data on_length_change_data = 
+  {
+    .buffer = buffer,
+    .tag    = tag
+  };
+  g_signal_connect (length, "value-changed",
+                    G_CALLBACK (on_length_change),
+                    &on_length_change_data);
+
+  gimp_procedure_dialog_get_label (GIMP_PROCEDURE_DIALOG (dialog),
+                                   "image-id-title", 
+                                   _("Image Id"),
+                                   FALSE, FALSE);
+
+  gimp_procedure_dialog_fill_frame (GIMP_PROCEDURE_DIALOG (dialog),
+                                    "image-id-frame",
+                                    "image-id-title", 
+                                    FALSE,
+                                    "image-id-params");
+
   vbox = gimp_procedure_dialog_fill_box (GIMP_PROCEDURE_DIALOG (dialog),
                                          "tga-save-vbox",
                                          "rle",
                                          "origin",
+                                         "image-id-frame",
                                          NULL);
+
   gtk_box_set_spacing (GTK_BOX (vbox), 12);
+  gtk_box_set_spacing (GTK_BOX (image_id_box), 12);
 
   gimp_procedure_dialog_fill (GIMP_PROCEDURE_DIALOG (dialog),
                               "tga-save-vbox",
@@ -1496,5 +1702,6 @@ save_dialog (GimpImage     *image,
 
   gtk_widget_destroy (dialog);
 
+  munmap(cfg, 4096);
   return run;
 }
