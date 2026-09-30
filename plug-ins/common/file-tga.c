@@ -74,8 +74,6 @@
  */
 
 #include "config.h"
-#include <sys/mman.h>
-#include <fcntl.h>
 
 #include <errno.h>
 #include <string.h>
@@ -234,7 +232,7 @@ G_DEFINE_TYPE (TgaHexView, tga_hex_view, GTK_TYPE_BOX)
 static GtkWidget * tga_hex_view_new                  (void);
 static void        tga_hex_view_on_gimp_theme_change (TgaHexView    *self,
                                                       gconstpointer _ignored);
-static void        set_dimmed_color                  (GtkWidget     *text_view, 
+static void        set_dimmed_color                  (GtkWidget     *text_view,
                                                       GtkTextTag    *tag);
 static void        tga_hex_view_set_bytes_length     (TgaHexView    *hex_view,
                                                       gint           bytes_to_color);
@@ -434,7 +432,7 @@ tga_export (GimpProcedure        *procedure,
       guint         image_id_length = 0;
 
       gimp_ui_init (PLUG_IN_BINARY);
-      
+
       parasite = gimp_image_get_parasite (image, "tga-image-id");
       if (parasite != NULL)
         {
@@ -1638,24 +1636,21 @@ tga_hex_view_class_init (TgaHexViewClass *klass)
 static void
 tga_hex_view_init (TgaHexView *self)
 {
-  // these are styling params for text_view
-  // and scrolled_window
+  /* styling params for text_view and scrolled_window */
   guint32 margin = 12;
   guint32 width  = 430;
   guint32 height = 100;
 
-  GtkTextBuffer *text_buffer;
-  GtkWidget     *text_view;
-  GtkWidget     *scrolled_window;
+  GtkWidget *text_view;
+  GtkWidget *scrolled_window;
 
   self->text_view       = gtk_text_view_new ();
   self->scrolled_window = gtk_scrolled_window_new (NULL, NULL);
-  self->text_buffer     = gtk_text_view_get_buffer (GTK_TEXT_VIEW (text_view));
-  self->bytes_inactive  = gtk_text_buffer_create_tag (text_buffer, "bytes-inactive", NULL);
+  self->text_buffer     = gtk_text_view_get_buffer (GTK_TEXT_VIEW (self->text_view));
+  self->bytes_inactive  = gtk_text_buffer_create_tag (self->text_buffer, "bytes-inactive", NULL);
 
-  text_buffer      = self->text_buffer;
-  scrolled_window  = self->scrolled_window;
-  text_view        = self->text_view;
+  scrolled_window = self->scrolled_window;
+  text_view       = self->text_view;
 
   gtk_container_add (GTK_CONTAINER (scrolled_window), text_view);
   gtk_widget_show_all (scrolled_window);
@@ -1671,7 +1666,7 @@ tga_hex_view_init (TgaHexView *self)
                                        GTK_POLICY_AUTOMATIC);
   
   /* Configure a text view, 
-     currently it is just a non editable hex view. */
+     currently it is just a non editable preview. */
   gtk_text_view_set_editable (GTK_TEXT_VIEW (text_view), FALSE);
   gtk_text_view_set_wrap_mode (GTK_TEXT_VIEW (text_view), GTK_WRAP_WORD);
   gtk_text_view_set_justification (GTK_TEXT_VIEW (text_view), GTK_JUSTIFY_LEFT);
