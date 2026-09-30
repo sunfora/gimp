@@ -449,6 +449,7 @@ tga_export (GimpProcedure        *procedure,
       if (! save_dialog (image, procedure, G_OBJECT (config)))
         status = GIMP_PDB_CANCEL;
     }
+
   export = gimp_export_options_get_image (options, &image);
   drawables = gimp_image_list_layers (image);
 
@@ -1295,7 +1296,7 @@ export_image (GFile         *file,
 
   image_id_length = (guint8) image_id_length_uint;
 
-  if (image_id_data != NULL) 
+  if (image_id_data != NULL)
     {
       gsize image_id_data_length;
       gconstpointer raw;
@@ -1551,7 +1552,6 @@ save_dialog (GimpImage     *image,
                                          "origin",
                                          "image-id-frame",
                                          NULL);
-
   gtk_box_set_spacing (GTK_BOX (vbox), 12);
 
   gimp_procedure_dialog_fill (GIMP_PROCEDURE_DIALOG (dialog),
@@ -1589,7 +1589,7 @@ setup_image_id_frame (GtkWidget *dialog, GObject *config)
   GtkWidget    *length;
   GBytes       *bytes;
 
-  length = gimp_procedure_dialog_get_widget (GIMP_PROCEDURE_DIALOG (dialog), 
+  length = gimp_procedure_dialog_get_widget (GIMP_PROCEDURE_DIALOG (dialog),
                                              "image-id-length",
                                              G_TYPE_NONE);
 
@@ -1597,25 +1597,25 @@ setup_image_id_frame (GtkWidget *dialog, GObject *config)
                                            "image-id-params",
                                            "image-id-length",
                                            /* hex_view */
-                                           "image-id-overwrite", 
+                                           "image-id-overwrite",
                                            NULL);
   view = tga_hex_view_new ();
   gtk_box_pack_start (GTK_BOX (params), view, TRUE, TRUE, 0);
   gtk_box_reorder_child (GTK_BOX (params), view, 1);
 
   gimp_procedure_dialog_get_label (GIMP_PROCEDURE_DIALOG (dialog),
-                                   "image-id-title", 
+                                   "image-id-title",
                                    _("Image Id"),
                                    FALSE, FALSE);
   gimp_procedure_dialog_fill_frame (GIMP_PROCEDURE_DIALOG (dialog),
                                     "image-id-frame",
-                                    "image-id-title", 
+                                    "image-id-title",
                                     FALSE,
                                     "image-id-params");
 
 
   g_object_get (config, "image-id-data", &bytes, NULL);
-  if (bytes != NULL) 
+  if (bytes != NULL)
     {
       tga_hex_view_set_bytes(TGA_HEX_VIEW (view), bytes);
       g_bytes_unref (bytes);
@@ -1654,27 +1654,22 @@ tga_hex_view_init (TgaHexView *self)
 
   gtk_container_add (GTK_CONTAINER (scrolled_window), text_view);
   gtk_widget_show_all (scrolled_window);
-  
-  /* Configure a scrolled window. */
+
+  /* Configure a scrolled window.
+     We want it to expand when user resizes the window. */
   gtk_widget_set_size_request (scrolled_window, width, height);
   gtk_widget_set_hexpand (scrolled_window, TRUE);
   gtk_widget_set_vexpand (scrolled_window, TRUE);
-  gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW (scrolled_window), 
-                                       GTK_SHADOW_IN);
-  gtk_scrolled_window_set_policy      (GTK_SCROLLED_WINDOW (scrolled_window),
-                                       GTK_POLICY_AUTOMATIC,
-                                       GTK_POLICY_AUTOMATIC);
-  
-  /* Configure a text view, 
+
+  /* Configure a text view,
      currently it is just a non editable preview. */
   gtk_text_view_set_editable (GTK_TEXT_VIEW (text_view), FALSE);
   gtk_text_view_set_wrap_mode (GTK_TEXT_VIEW (text_view), GTK_WRAP_WORD);
-  gtk_text_view_set_justification (GTK_TEXT_VIEW (text_view), GTK_JUSTIFY_LEFT);
 
-  gtk_text_view_set_top_margin (GTK_TEXT_VIEW (text_view), margin);
+  gtk_text_view_set_top_margin    (GTK_TEXT_VIEW (text_view), margin);
   gtk_text_view_set_bottom_margin (GTK_TEXT_VIEW (text_view), margin);
-  gtk_text_view_set_left_margin (GTK_TEXT_VIEW (text_view), margin);
-  gtk_text_view_set_right_margin (GTK_TEXT_VIEW (text_view), margin);
+  gtk_text_view_set_left_margin   (GTK_TEXT_VIEW (text_view), margin);
+  gtk_text_view_set_right_margin  (GTK_TEXT_VIEW (text_view), margin);
 
   gtk_text_view_set_monospace (GTK_TEXT_VIEW (text_view), TRUE);
 
@@ -1692,7 +1687,7 @@ set_dimmed_color (GtkWidget *text_view, GtkTextTag *tag)
   GtkStyleContext *context   = gtk_widget_get_style_context (text_view);
   GdkRGBA          color;
 
-  if (!gtk_style_context_lookup_color (context, "dimmed-fg-color", &color)) 
+  if (!gtk_style_context_lookup_color (context, "dimmed-fg-color", &color))
     gdk_rgba_parse (&color, "grey");
 
   g_object_set (G_OBJECT (tag), "foreground-rgba", &color, NULL);
@@ -1710,8 +1705,8 @@ tga_hex_view_on_gimp_theme_change (TgaHexView *self, gconstpointer _ignored)
 static void
 tga_hex_view_set_bytes_length (TgaHexView *hex_view, gint bytes_to_color)
 {
-  GtkTextBuffer   *buffer; 
-  GtkTextTag      *tag;    
+  GtkTextBuffer   *buffer;
+  GtkTextTag      *tag;
   gint             chars_to_color;
   GtkTextIter      start;
   GtkTextIter      end;
@@ -1725,7 +1720,7 @@ tga_hex_view_set_bytes_length (TgaHexView *hex_view, gint bytes_to_color)
   gtk_text_buffer_remove_tag (buffer, tag, &start, &end);
 
   gtk_text_buffer_get_iter_at_offset (buffer, &start, chars_to_color);
-  gtk_text_buffer_get_end_iter       (buffer, &end);
+  gtk_text_buffer_get_end_iter (buffer, &end);
 
   gtk_text_buffer_apply_tag (buffer, tag, &start, &end);
 }
@@ -1736,30 +1731,30 @@ tga_hex_view_new (void)
   return g_object_new (TGA_TYPE_HEX_VIEW, NULL);
 }
 
-static void 
+static void
 tga_hex_view_set_bytes (TgaHexView *hex_view, GBytes *bytes)
 {
   const gchar   *hex_digits = "0123456789abcdef";
   const guint8  *bytes_data;
-  GtkTextBuffer *buffer; 
+  GtkTextBuffer *buffer;
   gchar         *text;
   gsize          bytes_length;
   gsize          text_length;
   gboolean       nothing_to_display = FALSE;
 
   buffer = hex_view->text_buffer;
-  
+
   bytes_data = g_bytes_get_data (bytes, &bytes_length);
-  
+
   nothing_to_display = nothing_to_display || (bytes_data == NULL);
   nothing_to_display = nothing_to_display || (bytes_length == 0);
 
-  if (nothing_to_display) 
+  if (nothing_to_display)
     {
       gtk_text_buffer_set_text (buffer, "", -1);
       return;
     }
-  
+
   text_length = (bytes_length * 3) - 1;
   text = g_new(gchar, text_length + 1);
 
