@@ -446,6 +446,9 @@ tga_export (GimpProcedure        *procedure,
       g_object_set (config, "image-id-length", image_id_length, NULL);
       g_object_set (config, "image-id-data", image_id, NULL);
 
+      if (image_id != NULL)
+        g_bytes_unref (image_id);
+
       if (! save_dialog (image, procedure, G_OBJECT (config)))
         status = GIMP_PDB_CANCEL;
     }
@@ -1302,7 +1305,7 @@ export_image (GFile         *file,
       gconstpointer raw;
 
       raw = g_bytes_get_data (image_id_data, &image_id_data_length);
-      memcpy(image_id, raw, image_id_length);
+      memcpy(image_id, raw, MIN (image_id_data_length, image_id_length));
       g_bytes_unref (image_id_data);
     }
 
@@ -1575,7 +1578,7 @@ sync_length (GtkWidget *length, gpointer view)
   gint             bytes_to_color;
 
   hex_view = view;
-  spin_value = gimp_label_spin_get_value (GIMP_LABEL_SPIN (length));;
+  spin_value = gimp_label_spin_get_value (GIMP_LABEL_SPIN (length));
   bytes_to_color = (gint) spin_value;
 
   tga_hex_view_set_bytes_length (TGA_HEX_VIEW (hex_view), bytes_to_color);
@@ -1653,6 +1656,7 @@ tga_hex_view_init (TgaHexView *self)
   text_view       = self->text_view;
 
   gtk_container_add (GTK_CONTAINER (scrolled_window), text_view);
+  gtk_box_pack_start (GTK_BOX (self), scrolled_window, TRUE, TRUE, 0);
   gtk_widget_show_all (scrolled_window);
 
   /* Configure a scrolled window.
